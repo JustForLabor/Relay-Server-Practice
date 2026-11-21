@@ -126,7 +126,7 @@ flowchart TB
 | 코어 → 게임 | `on_input` | 받은 `GAME_IN` 하나. 형식이 틀리면 음수를 돌려주고, 코어가 그 연결을 끊는다 |
 | 코어 → 게임 | `on_tick` | 진행 한 번. 진행 간격이 있는 게임만 |
 | 게임 → 코어 | `send` · `broadcast` | 한 명 또는 여러 명에게 `GAME_OUT`. 신뢰 · 비신뢰를 고른다 |
-| 게임 → 코어 | `match_over` | 경기를 끝낸다. 코어가 결과를 알리고 방을 닫는다 |
+| 게임 → 코어 | `match_over` | 경기를 끝낸다. 코어가 결과를 알리고 경기를 지운다. 방은 남아 다시 하기를 기다린다 |
 
 게임 정의에는 이 밖에 `game_id`, 이름, 최소 · 최대 인원, 진행 간격, 입력 길이 상한이 들어 있다. 새 게임을 붙이는 일은 이 표의 함수를 구현하고, 등록 목록에 한 줄 넣고, protocol.md 6장에 페이로드 형식을 적는 것이다.
 
@@ -177,14 +177,14 @@ flowchart TB
 stateDiagram-v2
     direction TB
     state "로비: 방에 들어가지 않음" as lobby
-    state "대기: 방에서 사람이 더 오기를 기다림" as waiting
+    state "대기: 사람을 기다리거나 경기 결과를 봄" as waiting
     state "경기 중: 게임의 최소 인원이 참" as playing
     [*] --> lobby: 접속
     lobby --> waiting: 방을 만들거나 들어감
-    waiting --> playing: 최소 인원이 참
-    playing --> waiting: 최소 인원 아래로 줄어듦
+    waiting --> playing: 최소 인원이 참, 또는 경기 뒤 모두 다시 하기에 동의
+    playing --> waiting: 최소 인원 아래로 줄어듦, 또는 경기가 끝남
     waiting --> lobby: 내가 방에서 나감
-    playing --> lobby: 내가 나가거나 경기가 끝남
+    playing --> lobby: 내가 방에서 나감
 ```
 
 어느 상태에서든 **연결이 끊기거나 규칙에 어긋난 메시지를 보내면** 그 연결은 종료 표시가 되고, 메인 루프 5단계에서 방에서 빠진 뒤 지워진다. 남은 인원이 최소 인원보다 적어지면 경기가 끝나고 남은 사람은 "대기"로 돌아간다.
@@ -192,7 +192,7 @@ stateDiagram-v2
 | 그림 이름 | 코드 이름 | 받아 주는 메시지 (protocol.md 4장 이름) |
 |---|---|---|
 | 로비 | `LOBBY` | `LIST_ROOMS`, `CREATE_ROOM`, `QUICK_JOIN`, `JOIN_ROOM`, `JOIN_BY_CODE`, `PING` |
-| 대기 | `IN_ROOM` | `LEAVE_ROOM`, `PING` (`GAME_IN`은 버림) |
+| 대기 | `IN_ROOM` | `LEAVE_ROOM`, `PING`, `REMATCH`(경기가 막 끝난 방에서만). `GAME_IN`은 버림 |
 | 경기 중 | `PLAYING` | `GAME_IN`, `LEAVE_ROOM`, `PING` |
 | (종료 표시) | `CLOSING` | 없음. 5단계에서 정리 |
 
@@ -234,9 +234,13 @@ flowchart TB
     CODE -->|맞음| ROOM
     CODE -->|틀림| ERR["오류 응답<br/>틀린 코드를 여러 번 보내면 연결 종료"]
     ROOM -->|게임의 최소 인원이 참| PLAY["경기 시작"]
+    PLAY -->|경기가 끝남| DONE["결과 화면 (같은 방에 그대로)"]
+    DONE -->|모두 다시 하기에 동의| PLAY
+    DONE -->|나감| L
 ```
 
 - 목록은 사람을 기다리는 공개 방만 보여 주고, 한 번에 32개까지 보낸다(응답 한 프레임이 최대 페이로드 512바이트 안에 들어가게).
+- 경기가 끝나도 방은 닫지 않는다. 방에 있는 사람이 모두 "다시 하기"에 동의하면 같은 방, 같은 자리로 새 경기를 시작한다. 누가 나가면 동의는 지워지고 보통 대기 방으로 돌아간다(protocol.md 5.5절).
 - 코드는 추측해서 맞히기 어렵게 무작위로 만들고, 한 연결이 틀린 코드를 5번 보내면 끊는다.
 - 메시지 이름 · 필드는 protocol.md 4–5장에 있다.
 

@@ -45,7 +45,8 @@ typedef struct game_host {
                       enum game_send_mode mode);
 
     /* 게임이 경기를 끝낸다. 코어는 현재 콜백이 돌아온 뒤 MATCH_END(0)를 보내고
-     * match_destroy를 부른 다음 방을 닫는다. 같은 경기에서 두 번 불러도 한 번만 처리한다. */
+     * match_destroy를 부른다. 방은 남아 다시 하기를 기다리고, 모두 동의하면 match_create로
+     * 새 경기를 만든다(protocol.md 5.5절). 같은 경기에서 두 번 불러도 한 번만 처리한다. */
     void (*match_over)(void *ctx);
 } game_host;
 
@@ -58,7 +59,7 @@ typedef struct game_def {
     uint16_t tick_hz;      /* 진행 간격(초당 횟수). 0이면 on_tick을 부르지 않는다 */
     uint16_t max_input_len;/* GAME_IN 페이로드 상한. 1 .. GAME_MAX_PAYLOAD */
 
-    /* 경기 시작 때 부른다. 경기 상태를 만들어 돌려준다(실패하면 NULL, 코어가 방을 닫는다).
+    /* 경기 시작 · 다시 하기 때마다 부른다. 경기 상태를 새로 만들어 돌려준다(실패하면 NULL, 코어가 방을 닫는다).
      * host 포인터는 match_destroy까지 유효하다. slots[i]가 1이면 slot i에 사람이 있다. */
     void *(*match_create)(const game_host *host, const uint8_t slots[GAME_MAX_SLOTS]);
 
