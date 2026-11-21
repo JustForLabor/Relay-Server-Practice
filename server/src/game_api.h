@@ -2,10 +2,10 @@
  *
  * 코어는 접속 · 메시지 자르기 · 로비 · 방 · 진행 시계를 맡고, 게임 규칙은 모른다.
  * 게임 모듈은 game_def 하나를 내놓고, 플레이어에게는 game_host가 준 함수로만 보낸다.
- * 코어는 GAME_IN 페이로드를 해석하지 않고 on_input에 그대로 넘기며, 게임이 보내는
- * 바이트는 GAME_OUT 페이로드로 그대로 감싼다.
+ * 코어는 GAME_IN 페이로드와 방 규칙 값(settings)을 해석하지 않고 게임에 그대로 넘기며,
+ * 게임이 보내는 바이트는 GAME_OUT 페이로드로 그대로 감싼다.
  *
- * 바이트 형식: docs/protocol.md 4장(GAME_IN, GAME_OUT), 6장(게임별 명세).
+ * 바이트 형식: docs/protocol.md 4장(CREATE_ROOM, ROOM_JOINED, GAME_IN, GAME_OUT), 6장(게임별 명세).
  * 이유: docs/adr/0002-game-interface.md.
  */
 #ifndef GAME_API_H
@@ -19,6 +19,9 @@
 
 /* GAME_IN · GAME_OUT 페이로드 상한. 프레임 페이로드 상한(512)보다 작게 둔다. */
 #define GAME_MAX_PAYLOAD 500
+
+/* 방 규칙 값(settings) 상한. CREATE_ROOM의 settings_len 상한과 같다. */
+#define GAME_MAX_SETTINGS 64
 
 /* broadcast에서 아무도 빼지 않을 때. */
 #define GAME_SLOT_NONE (-1)
@@ -59,9 +62,18 @@ typedef struct game_def {
     uint16_t tick_hz;      /* 진행 간격(초당 횟수). 0이면 on_tick을 부르지 않는다 */
     uint16_t max_input_len;/* GAME_IN 페이로드 상한. 1 .. GAME_MAX_PAYLOAD */
 
+    /* 방을 만들 때 한 번 부른다. 클라이언트가 보낸 규칙 값 in(in_len이 0이면 기본값을 뜻함)을
+     * 검사하고, 방에 고정할 규칙 값 전체를 out에 쓴 뒤 *out_len에 길이를 넣는다
+     * (out은 GAME_MAX_SETTINGS바이트). 길이나 범위가 틀리면 음수를 돌려준다:
+     * 코어가 ERROR(BAD_SETTINGS)를 보내고 방을 만들지 않는다.
+     * 규칙 값이 없는 게임은 NULL. 그때 코어는 in_len이 0일 때만 받아 주고 out_len을 0으로 둔다. */
+    int (*settings_resolve)(const uint8_t *in, size_t in_len, uint8_t *out, size_t *out_len);
+
     /* 경기 시작 · 다시 하기 때마다 부른다. 경기 상태를 새로 만들어 돌려준다(실패하면 NULL, 코어가 방을 닫는다).
+     * settings는 settings_resolve가 만든 방 규칙 값이며 이미 검사를 통과했다.
      * host 포인터는 match_destroy까지 유효하다. slots[i]가 1이면 slot i에 사람이 있다. */
-    void *(*match_create)(const game_host *host, const uint8_t slots[GAME_MAX_SLOTS]);
+    void *(*match_create)(const game_host *host, const uint8_t slots[GAME_MAX_SLOTS],
+                          const uint8_t *settings, size_t settings_len);
 
     /* 경기 상태를 해제한다. 이 안에서 host 함수를 부르지 않는다. */
     void (*match_destroy)(void *match);
