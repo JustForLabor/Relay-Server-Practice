@@ -15,7 +15,7 @@ void scenario_g_relay_three(void);
 void scenario_h_robustness(void);
 void scenario_i_slow_reader(void);
 
-/* Pong 경기 중 33ms마다 GAME_IN을 보내며 받은 STATE를 기록한다. */
+/* Pong 경기 중 진행 간격(1/30초)마다 GAME_IN을 보내며 받은 STATE를 기록한다. */
 #define PONG_LOG_CAP 512
 typedef struct pong_log {
     int states;

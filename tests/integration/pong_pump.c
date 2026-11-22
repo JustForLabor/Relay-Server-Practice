@@ -5,7 +5,9 @@
 #include "scenarios.h"
 #include "wire.h"
 
-#define INPUT_INTERVAL_MS 33 /* protocol.md 6.1: MATCH_START 뒤 33ms마다 하나씩 */
+/* protocol.md 6.1: 진행 간격과 같은 1/30초마다 하나씩. n번째 전송 시각 = 시작 + n × 1000/30ms로
+ * 계산해 33ms 반올림 오차가 쌓이지 않게 한다. */
+#define INPUTS_PER_SEC 30
 
 static void record(pong_log *l, const msg *m)
 {
@@ -27,6 +29,7 @@ int pump_pong(client *cs[], pong_log logs[], int n, int duration_ms, uint8_t sto
     memset(logs, 0, sizeof *logs * (size_t)n);
     uint64_t start = itest_now_ms();
     uint64_t end = start + (uint64_t)duration_ms;
+    uint64_t sent = 0;
     uint64_t next_send = start;
     for (;;) {
         uint64_t now = itest_now_ms();
@@ -44,7 +47,8 @@ int pump_pong(client *cs[], pong_log logs[], int n, int duration_ms, uint8_t sto
                 if (!logs[i].stopped)
                     send_pong_input(cs[i], 0);
             }
-            next_send += INPUT_INTERVAL_MS;
+            sent++;
+            next_send = start + sent * 1000u / INPUTS_PER_SEC;
             continue;
         }
         struct pollfd pfd[8];
