@@ -20,4 +20,8 @@ void session_open(conn *c);
 /* 프레임 검사를 통과한 메시지 하나를 처리한다. 처리 중 c가 종료 표시될 수 있다. */
 void session_handle(conn *c, const frame *f);
 
+/* 묶인 주소에서 UDP로 온 GAME_IN 하나(protocol.md 7장 4번). 경기 중일 때만 게임에 넘기고,
+ * 길이 · 형식이 틀려도 연결은 그대로 둔다. */
+void session_udp_game_in(conn *c, const uint8_t *data, size_t len);
+
 #endif /* SESSION_H */

@@ -72,8 +72,8 @@ void scenario_b_public_room_pong(void)
     client_quit(&b);
 }
 
-/* 빨리 끝나는 규칙: 공이 패들을 빗나가 첫 득점으로 끝난다(win_score 1). */
-static void fast_settings(uint8_t s[25])
+/* 빨리 끝나는 규칙: 공이 패들을 빗나가 첫 득점으로 끝난다(win_score 1). (j)도 쓴다. */
+void fast_settings(uint8_t s[25])
 {
     const uint16_t v[12] = {200, 150, 2, 10, 2, 1, 2, 4, 3, 4, 8, 0};
     for (int i = 0; i < 12; i++)

@@ -364,15 +364,33 @@ static void pong_match_destroy(void *match)
     free(match);
 }
 
+/* GAME_IN 두 형식(protocol.md 6.1절): 단일 5바이트, 또는 u8 n + 5바이트 n개(n = 1–4, 오래된 것부터).
+ * 1 + 5n은 5가 될 수 없어 길이만으로 형식이 갈린다. 묶음은 모두 검사한 뒤에만 큐에 넣는다:
+ * 중간에 틀린 항목이 있으면 앞 항목만 들어가 번호가 소비되는 일이 없게 한다. 같은 입력이 여러
+ * 묶음에 겹쳐 와도(UDP 손실 메우기) 큐의 중복 규칙이 한 번만 쓰이게 한다. */
 static int pong_on_input(void *match, int slot, const uint8_t *data, size_t len)
 {
     pong_match *m = match;
-    if (len != PONG_INPUT_LEN || slot < 0 || slot > 1)
+    if (slot < 0 || slot > 1)
         return -1;
-    uint8_t axis = data[4];
-    if (axis > PONG_AXIS_DOWN)
-        return -1;
-    pong_queue_push(&m->queue[slot], get_u32(data), axis);
+    const uint8_t *items = data;
+    size_t n = 1;
+    if (len != PONG_INPUT_LEN) {
+        if (len < 1)
+            return -1;
+        n = data[0];
+        if (n < 1 || n > PONG_BATCH_MAX || len != 1 + PONG_INPUT_LEN * n)
+            return -1;
+        items = data + 1;
+    }
+    for (size_t i = 0; i < n; i++) {
+        if (items[i * PONG_INPUT_LEN + 4] > PONG_AXIS_DOWN)
+            return -1;
+    }
+    for (size_t i = 0; i < n; i++) {
+        const uint8_t *it = items + i * PONG_INPUT_LEN;
+        pong_queue_push(&m->queue[slot], get_u32(it), it[4]);
+    }
     return 0;
 }
 
@@ -412,7 +430,7 @@ const game_def pong_game = {
     .min_players = 2,
     .max_players = 2,
     .tick_hz = 30,
-    .max_input_len = PONG_INPUT_LEN,
+    .max_input_len = PONG_INPUT_MAX_LEN,
     .settings_resolve = pong_settings_resolve,
     .match_create = pong_match_create,
     .match_destroy = pong_match_destroy,

@@ -1,0 +1,1 @@
+{"scenario":"S1","run":"tcp_b1000_d00_l0_r3","rep":3,"mode":"tcp","bots":1000,"delay_ms":0,"loss_pct":0,"duration_s":60,"ramp_s":2,"warmup_s":3,"status":"ok","extra_args":"","loadavg_start":"0.18 0.46 0.46","loadavg_end":"0.06 0.37 0.43"}

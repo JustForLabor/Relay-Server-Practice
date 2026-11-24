@@ -72,7 +72,7 @@ static void test_def(void)
     CHECK_EQ(pong_game.min_players, 2);
     CHECK_EQ(pong_game.max_players, 2);
     CHECK_EQ(pong_game.tick_hz, 30);
-    CHECK_EQ(pong_game.max_input_len, 5);
+    CHECK_EQ(pong_game.max_input_len, 21); /* 묶음 n = 4: 1 + 5 × 4 (protocol.md 6.1절) */
     CHECK(pong_game.on_join == NULL && pong_game.on_leave == NULL);
     CHECK(pong_game.settings_resolve && pong_game.match_create && pong_game.match_destroy);
     CHECK(pong_game.on_input && pong_game.on_tick);

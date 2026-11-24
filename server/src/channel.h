@@ -1,5 +1,5 @@
 /* channel.h - game_host 구현: 게임이 고른 보내기 방식을 실제 전송으로 바꾼다
- * (overview.md 6.1 channel, ADR 0001 3번). 2차에서 비신뢰를 UDP로 옮길 때 이 모듈만 바꾼다. */
+ * (overview.md 6.1 channel, ADR 0001 3번). 신뢰는 TCP, 비신뢰는 UDP로 묶인 연결이면 UDP(udp.c). */
 #ifndef CHANNEL_H
 #define CHANNEL_H
 

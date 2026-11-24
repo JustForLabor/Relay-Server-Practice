@@ -124,6 +124,13 @@ namespace Relay.EditorTools
                 problems.Add("uiRoot not assigned");
             if (so.FindProperty("serverHost").stringValue != "127.0.0.1" || so.FindProperty("serverPort").intValue != 7777)
                 problems.Add("server address is not 127.0.0.1:7777");
+            // "UDP 사용" 토글(protocol.md 7장): 기본은 켬. 끄면 TCP만 쓴다.
+            SerializedProperty useUdp = so.FindProperty("useUdp");
+            if (useUdp == null || useUdp.propertyType != SerializedPropertyType.Boolean)
+                problems.Add("useUdp toggle not serialized");
+            else if (!useUdp.boolValue)
+                problems.Add("useUdp is off, expected on (default)");
+            Debug.Log($"[SceneBuilder] useUdp = {(useUdp == null ? "missing" : useUdp.boolValue.ToString())} (default True)");
             if (UnityEngine.Object.FindFirstObjectByType<EventSystem>() == null)
                 problems.Add("EventSystem missing");
             if (UnityEngine.Object.FindFirstObjectByType<Light2D>() == null)
@@ -135,7 +142,7 @@ namespace Relay.EditorTools
 
             if (problems.Count > 0)
                 throw new Exception("[SceneBuilder] verify failed:\n" + string.Join("\n", problems));
-            Debug.Log($"[SceneBuilder] verify OK: GameManager with {checkedCount}/13 default rule values, build scene {ScenePath}");
+            Debug.Log($"[SceneBuilder] verify OK: GameManager with {checkedCount}/13 default rule values, useUdp on, build scene {ScenePath}");
         }
     }
 }

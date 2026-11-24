@@ -14,6 +14,10 @@ void scenario_f_disconnect_mid_match(void);
 void scenario_g_relay_three(void);
 void scenario_h_robustness(void);
 void scenario_i_slow_reader(void);
+void scenario_j_udp_bind(void);
+void scenario_k_udp_ignored(void);
+void scenario_l_max_conns(void);
+void scenario_m_stats(void);
 
 /* Pong 경기 중 진행 간격(1/30초)마다 GAME_IN을 보내며 받은 STATE를 기록한다. */
 #define PONG_LOG_CAP 512
@@ -36,5 +40,33 @@ int pong_logs_agree(const pong_log *a, const pong_log *b);
 
 /* 목록 응답에서 room_id를 찾는다. 있으면 1(players · max도 돌려줌). */
 int room_list_has(const msg *list, uint32_t room_id, uint8_t *players, uint8_t *max);
+
+/* Pong 규칙 값 25바이트: 공이 첫 서브에 패들을 빗나가 바로 득점하고 win_score 1로 끝난다. */
+void fast_settings(uint8_t s[25]);
+
+/* ---- UDP 섞인 경기 (scenarios_udp.c) ---- */
+
+/* 경로별로 센 Pong GAME_OUT. STATE는 tick이 가장 큰 것을 "최신"으로 본다. */
+typedef struct ulog {
+    int udp_states, tcp_states, udp_goals, tcp_goals;
+    int any_state;
+    uint32_t last_tick, last_input_seq; /* 최신 STATE의 값 */
+    int seq_went_back; /* tick은 커졌는데 last_input_seq가 작아진 횟수 */
+    int bad_udp;       /* 프레임이 아니거나 GAME_OUT이 아닌 데이터그램 */
+    int stopped;
+    msg stop;
+} ulog;
+
+/* a가 비공개 Pong 방을 만들고 b가 코드로 들어가 둘 다 MATCH_START까지. bind_a · bind_b면 방에
+ * 들어가기 전에 UDP로 묶는다. 성공 1. */
+int udp_pair(client *a, client *b, int bind_a, int bind_b, const uint8_t *settings,
+             uint8_t settings_len);
+
+/* pump_pong과 같지만 ufd가 열린 클라이언트는 묶음 GAME_IN을 UDP로 보내고 UDP도 받는다.
+ * TCP가 끊기면 0. */
+int udp_pump(client *cs[], ulog logs[], int n, int duration_ms, uint8_t stop_type);
+
+/* 서버 로그 파일 이름 앞부분(통합 테스트 실행 파일 경로). 따로 띄우는 서버의 로그가 쓴다. */
+extern const char *g_itest_log_prefix;
 
 #endif /* ITEST_SCENARIOS_H */

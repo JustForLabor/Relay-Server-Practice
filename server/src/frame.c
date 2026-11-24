@@ -17,7 +17,8 @@ void frame_reader_init(frame_reader *r)
 }
 
 /* type별 허용 페이로드 길이(protocol.md 4.1 표). 모르는 type이면 0을 돌려준다.
- * 이 표에 없는 번호(0x00, 정의 안 된 번호, 0x80 이상)는 모두 즉시 종료 대상이다. */
+ * 이 표에 없는 번호(0x00, 정의 안 된 번호, 0x80 이상)는 모두 즉시 종료 대상이다.
+ * UDP_BIND(0x18)는 UDP로만 오는 메시지라 이 표(TCP 프레임)에 넣지 않는다. UDP는 udp.c가 따로 본다. */
 static int payload_limits(uint8_t type, uint16_t *min, uint16_t *max)
 {
     switch (type) {

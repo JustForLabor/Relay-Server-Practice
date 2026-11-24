@@ -1,0 +1,16 @@
+{
+  "config":{"host":"127.0.0.1","port":7777,"bots":2,"mode":"tcp","duration_s":20.0,"ramp_s":2.0,"warmup_s":3.0,"seed":3,"win_score":21,"tick_hz":30},
+  "window_s":20.000,"window_unix_ms":[1795487392486,1795487412486],
+  "connect":{"ok":2,"fail":0,"fail_reasons":{"socket":0,"connect":0,"server_full":0,"closed":0,"protocol":0,"tool_tx_overflow":0,"no_welcome":0},"dropped_after_welcome":0,"drop_reasons":{"socket":0,"connect":0,"server_full":0,"closed":0,"protocol":0,"tool_tx_overflow":0,"no_welcome":0}},
+  "udp":{"bound":0,"fallback_tcp":0,"tx_err":0},
+  "rooms_created":1,"joins_sent":1,"matches_started":1,"matches_ended":0,"rematch_sent":0,"goals":3,
+  "errors_rx":{},
+  "inputs_late_tick_all":0,
+  "window":{"inputs_sent":1200,"inputs_sent_udp":0,"states_rx":1200,"states_rx_udp":0,"states_accepted":1200,"ticks_skipped":0,"tick_skip_ratio":0.000000,"states_reordered":0,"inputs_unreflected":0,"latency_untracked":0,"pings_sent":40,"pongs_rx":40},
+  "input_latency_ms":{"count":1200,"p50":33.500,"p95":33.800,"p99":33.900,"max":34.099,"mean":33.481,"overflow":0,"bin_ms":0.1,"bins":[[330,6],[331,24],[332,88],[333,230],[334,361],[335,246],[336,150],[337,65],[338,25],[339,3],[340,2]]},
+  "state_interval_ms":{"count":1200,"p50":33.400,"p95":33.700,"p99":33.800,"max":33.914,"mean":33.333,"overflow":0,"bin_ms":0.1,"bins":[[327,2],[328,4],[329,18],[330,53],[331,245],[332,258],[333,209],[334,171],[335,138],[336,64],[337,29],[338,7],[339,2]]},
+  "rtt_ms":{"count":40,"p50":0.200,"p95":0.300,"p99":0.315,"max":0.315,"mean":0.165,"overflow":0,"bin_ms":0.1,"bins":[[0,6],[1,22],[2,10],[3,2]]},
+  "input_send_lag_ms":{"count":1200,"p50":0.200,"p95":0.400,"p99":0.491,"max":0.491,"mean":0.183,"overflow":0,"bin_ms":0.1,"bins":[[0,99],[1,676],[2,346],[3,66],[4,13]]},
+  "input_send_lag_all_ms":{"count":1440,"p50":0.200,"p95":0.400,"p99":0.500,"max":0.642,"mean":0.186,"overflow":0,"bin_ms":0.1,"bins":[[0,109],[1,791],[2,443],[3,79],[4,15],[5,1],[6,2]]},
+  "tool":{"cpu_user_s":0.029,"cpu_sys_s":0.051,"cpu_util":0.0040,"max_rss_kb":1652,"loop_iterations":1635,"timers_fired":1489}
+}

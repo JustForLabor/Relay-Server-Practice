@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "msg.h"
+#include "stats.h"
 
 static void send_all_u8(room *r, uint8_t type, uint8_t v)
 {
@@ -101,19 +102,13 @@ void match_player_left(room *r, int slot)
     }
 }
 
-void match_input(room *r, conn *c, const uint8_t *data, size_t len)
+int match_input(room *r, conn *c, const uint8_t *data, size_t len)
 {
-    if (len > r->game->max_input_len) {
-        /* 5.4절: 길이가 그 종류의 허용 길이와 다르면 ERROR 없이 끊는다. */
-        conn_kill(c, "game_in longer than game limit");
-        return;
-    }
+    if (len > r->game->max_input_len)
+        return MATCH_INPUT_TOO_LONG;
     int rc = r->game->on_input(r->match, c->slot, data, len);
     match_settle(r);
-    if (rc < 0) {
-        msg_error(c, ERR_BAD_GAME_INPUT, "bad game input");
-        conn_kill(c, "bad game input");
-    }
+    return rc < 0 ? MATCH_INPUT_REJECTED : MATCH_INPUT_OK;
 }
 
 void match_tick(room *r, uint64_t now)
@@ -126,10 +121,14 @@ void match_tick(room *r, uint64_t now)
         steps++;
         match_settle(r); /* 경기가 끝났으면 match가 NULL이 되어 남은 진행을 하지 않는다 */
     }
+    g_stats.ticks += (uint64_t)steps;
     if (r->match != NULL && tick_clock_deadline(&r->clock) <= now) {
+        uint64_t before = r->clock.dropped;
         tick_clock_drop_backlog(&r->clock, now);
-        fprintf(stderr, "room %u: behind schedule, dropped ticks (total %llu)\n", r->id,
-                (unsigned long long)r->clock.dropped);
+        g_stats.ticks_dropped += r->clock.dropped - before;
+        if (!g_quiet_logs)
+            fprintf(stderr, "room %u: behind schedule, dropped ticks (total %llu)\n", r->id,
+                    (unsigned long long)r->clock.dropped);
     }
 }
 

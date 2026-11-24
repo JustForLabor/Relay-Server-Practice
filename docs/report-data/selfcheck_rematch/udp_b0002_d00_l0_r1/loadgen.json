@@ -1,0 +1,16 @@
+{
+  "config":{"host":"127.0.0.1","port":7777,"bots":2,"mode":"udp","duration_s":20.0,"ramp_s":2.0,"warmup_s":3.0,"seed":1,"win_score":1,"tick_hz":30},
+  "window_s":20.000,"window_unix_ms":[1795487528251,1795487548249],
+  "connect":{"ok":2,"fail":0,"fail_reasons":{"socket":0,"connect":0,"server_full":0,"closed":0,"protocol":0,"tool_tx_overflow":0,"no_welcome":0},"dropped_after_welcome":0,"drop_reasons":{"socket":0,"connect":0,"server_full":0,"closed":0,"protocol":0,"tool_tx_overflow":0,"no_welcome":0}},
+  "udp":{"bound":2,"fallback_tcp":0,"tx_err":0},
+  "rooms_created":1,"joins_sent":1,"matches_started":4,"matches_ended":3,"rematch_sent":6,"goals":3,
+  "errors_rx":{},
+  "inputs_late_tick_all":0,
+  "window":{"inputs_sent":1204,"inputs_sent_udp":1204,"states_rx":1200,"states_rx_udp":1200,"states_accepted":1200,"ticks_skipped":0,"tick_skip_ratio":0.000000,"states_reordered":0,"inputs_unreflected":0,"latency_untracked":0,"pings_sent":40,"pongs_rx":40},
+  "input_latency_ms":{"count":1200,"p50":33.500,"p95":33.800,"p99":34.000,"max":34.581,"mean":33.493,"overflow":0,"bin_ms":0.1,"bins":[[327,1],[329,1],[330,1],[331,12],[332,103],[333,242],[334,306],[335,256],[336,162],[337,72],[338,30],[339,7],[340,3],[342,1],[343,1],[345,2]]},
+  "state_interval_ms":{"count":1196,"p50":33.400,"p95":33.700,"p99":33.900,"max":34.508,"mean":33.334,"overflow":0,"bin_ms":0.1,"bins":[[323,2],[327,2],[328,6],[329,14],[330,41],[331,260],[332,267],[333,188],[334,180],[335,133],[336,61],[337,28],[338,8],[339,2],[341,2],[345,2]]},
+  "rtt_ms":{"count":40,"p50":0.200,"p95":0.351,"p99":0.351,"max":0.351,"mean":0.194,"overflow":0,"bin_ms":0.1,"bins":[[0,5],[1,17],[2,13],[3,5]]},
+  "input_send_lag_ms":{"count":1204,"p50":0.200,"p95":0.400,"p99":0.500,"max":1.007,"mean":0.180,"overflow":0,"bin_ms":0.1,"bins":[[0,138],[1,670],[2,302],[3,78],[4,12],[5,1],[6,1],[7,1],[10,1]]},
+  "input_send_lag_all_ms":{"count":1446,"p50":0.200,"p95":0.400,"p99":0.500,"max":1.007,"mean":0.177,"overflow":0,"bin_ms":0.1,"bins":[[0,193],[1,801],[2,343],[3,90],[4,13],[5,1],[6,1],[7,1],[8,1],[9,1],[10,1]]},
+  "tool":{"cpu_user_s":0.003,"cpu_sys_s":0.081,"cpu_util":0.0042,"max_rss_kb":1636,"loop_iterations":1582,"timers_fired":1497}
+}

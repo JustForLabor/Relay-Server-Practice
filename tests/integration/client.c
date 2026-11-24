@@ -33,6 +33,7 @@ uint64_t itest_now_ms(void)
 int client_connect(client *c, int rcvbuf)
 {
     memset(c, 0, sizeof *c);
+    c->ufd = -1;
     c->fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (c->fd == -1)
         return -1;
@@ -63,6 +64,9 @@ void client_close(client *c)
     if (c->fd != -1)
         close(c->fd);
     c->fd = -1;
+    if (c->ufd != -1)
+        close(c->ufd);
+    c->ufd = -1;
 }
 
 void client_send_raw(client *c, const void *bytes, size_t n)

@@ -68,6 +68,7 @@ namespace Relay.Net
         public const byte LeaveRoom = 0x15;
         public const byte Ping = 0x16;
         public const byte Rematch = 0x17;
+        public const byte UdpBind = 0x18;   // 7장: UDP로만
         public const byte GameIn = 0x40;
 
         // 4.2 서버 → 클라이언트
@@ -80,6 +81,7 @@ namespace Relay.Net
         public const byte MatchEnd = 0x86;
         public const byte Pong = 0x87;
         public const byte RematchVoted = 0x88;
+        public const byte UdpBound = 0x89;  // 7장: UDP로만
         public const byte Error = 0x8F;
         public const byte GameOut = 0xC0;
     }

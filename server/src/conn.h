@@ -6,11 +6,13 @@
 #ifndef CONN_H
 #define CONN_H
 
+#include <netinet/in.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #include "frame.h"
+#include "uthash.h"
 
 /* 송신 버퍼 상한. 읽지 않는 클라이언트 하나가 서버 메모리를 끝없이 먹지 못하게 한다. */
 #define CONN_OUT_MAX (64u * 1024u)
@@ -20,7 +22,9 @@ struct room;
 typedef struct conn {
     int fd;
     uint32_t id;
-    uint32_t udp_token;
+    uint32_t udp_token; /* 연결마다 다른 무작위 값. udp_token → 연결 표의 열쇠 */
+    bool udp_bound;     /* UDP_BIND를 받아 udp_addr가 정해졌나(protocol.md 7장) */
+    struct sockaddr_in udp_addr;
     bool closing;
     const char *close_reason;
     bool epollout_on;
@@ -38,6 +42,7 @@ typedef struct conn {
     struct conn *flush_prev, *flush_next;
     bool in_flush;
     struct conn *close_next; /* 종료 표시된 연결 목록 */
+    UT_hash_handle hh_token; /* udp_token → 연결. 연결이 정리될 때 함께 빠진다(7장 5번) */
 } conn;
 
 /* max_fds 크기의 fd → 연결 표를 만든다. 실패하면 -1. */
@@ -50,6 +55,15 @@ void conn_system_shutdown(void);
 conn *conn_open(int fd);
 
 size_t conn_count(void);
+
+/* udp_token으로 살아 있는 연결을 찾는다. 없으면 NULL. */
+conn *conn_find_by_token(uint32_t token);
+
+/* 연결의 UDP 주소를 from으로 정한다(처음 묶기 · 주소 바꾸기 모두). */
+void conn_udp_bind(conn *c, const struct sockaddr_in *from);
+
+/* UDP로 묶인 연결 수(통계). */
+size_t conn_udp_bound_count(void);
 
 /* 종료 표시. 이후 이 연결로 가는 송신은 버려지고, 수신 처리도 멈춘다. */
 void conn_kill(conn *c, const char *why);

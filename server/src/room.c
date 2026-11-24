@@ -32,6 +32,18 @@ size_t rooms_count(void)
     return HASH_COUNT(g_rooms);
 }
 
+size_t rooms_match_count(void)
+{
+    /* 통계 보고(초 단위)에서만 부르므로 따로 세어 두지 않고 그때 훑는다. */
+    size_t n = 0;
+    room *r, *tmp;
+    HASH_ITER(hh, g_rooms, r, tmp) {
+        if (r->match != NULL)
+            n++;
+    }
+    return n;
+}
+
 /* 공개 목록 규칙(protocol.md 5.3절): 빈자리가 있는 대기 방만. 경기 중 · 막 끝난 방은 빠진다. */
 static bool listable(const room *r)
 {

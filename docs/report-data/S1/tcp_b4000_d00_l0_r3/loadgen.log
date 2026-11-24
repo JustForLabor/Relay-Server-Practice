@@ -1,0 +1,1 @@
+loadgen: bots=4000 ok=4000 fail=0 matches=2000 states=7200014 lat_p50=34.6ms lat_p99=133.7ms rtt_p50=0.30ms tool_cpu=49% -> /src/docs/report-data/S1/tcp_b4000_d00_l0_r3/loadgen.json

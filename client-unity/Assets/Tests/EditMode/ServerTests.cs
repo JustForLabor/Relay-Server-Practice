@@ -1,7 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading;
 using NUnit.Framework;
 using Pong.Protocol;
 using Relay.Net;
@@ -15,81 +12,12 @@ namespace Relay.Tests
     [Category("Server")]
     public class ServerTests
     {
-        private const string Host = "127.0.0.1";
-        private const int Port = 7777;
-        private const int Wait = 5000;
+        private readonly List<ServerPeer> _peers = new List<ServerPeer>();
 
-        private readonly List<Peer> _peers = new List<Peer>();
-
-        /// <summary>연결 하나와, 기다리는 동안 지나간 프레임 수를 세는 도우미.</summary>
-        private sealed class Peer
+        private ServerPeer Connect(string name)
         {
-            public readonly RelayConnection Conn = new RelayConnection();
-            public readonly string Name;
-            public int States;
-            public int Goals;
-            public uint InputSeq;
-
-            public Peer(string name) { Name = name; }
-
-            public Frame WaitFor(byte type, int timeoutMs = Wait, Action<Frame> onOther = null)
-            {
-                var sw = Stopwatch.StartNew();
-                while (sw.ElapsedMilliseconds < timeoutMs)
-                {
-                    if (!Conn.TryReceive(out RelayEvent e))
-                    {
-                        Thread.Sleep(2);
-                        continue;
-                    }
-                    if (e.Kind == RelayEventKind.Closed)
-                        Assert.Fail($"{Name}: closed while waiting for 0x{type:X2}: {e.Reason}");
-                    if (e.Kind != RelayEventKind.Frame)
-                        continue;
-                    Count(e.Frame);
-                    if (e.Frame.Type == type)
-                        return e.Frame;
-                    if (e.Frame.Type == MsgType.Error && type != MsgType.Error)
-                        Assert.Fail($"{Name}: ERROR {ErrorMessage.Parse(e.Frame.Payload)} while waiting for 0x{type:X2}");
-                    onOther?.Invoke(e.Frame);
-                }
-                Assert.Fail($"{Name}: timed out waiting for 0x{type:X2}");
-                return default;
-            }
-
-            public void Count(Frame f)
-            {
-                if (f.Type != MsgType.GameOut)
-                    return;
-                if (f.Payload[0] == PongIds.OutState) States++;
-                if (f.Payload[0] == PongIds.OutGoal) Goals++;
-            }
-
-            public void Send(byte[] frame) => Assert.IsTrue(Conn.Send(frame), $"{Name}: send failed");
-
-            public void SendInput() => Send(ClientMessages.GameIn(PongInput.Encode(++InputSeq, PongIds.AxisNone)));
-        }
-
-        private Peer Connect(string name)
-        {
-            var p = new Peer(name);
+            ServerPeer p = ServerPeer.Connect(name);
             _peers.Add(p);
-            p.Conn.Start(Host, Port);
-            var sw = Stopwatch.StartNew();
-            while (sw.ElapsedMilliseconds < Wait)
-            {
-                if (p.Conn.TryReceive(out RelayEvent e))
-                {
-                    if (e.Kind == RelayEventKind.Closed)
-                        Assert.Fail($"{name}: connect to {Host}:{Port} failed: {e.Reason} (server running?)");
-                    if (e.Kind == RelayEventKind.Connected)
-                        break;
-                }
-                Thread.Sleep(2);
-            }
-            var w = Welcome.Parse(p.WaitFor(MsgType.Welcome).Payload);
-            Assert.IsTrue(w.Games.Exists(g => g.GameId == PongIds.GameId && g.MinPlayers == 2 && g.TickHz == 30),
-                "WELCOME must list Pong (game 1, 2 players, 30Hz)");
             return p;
         }
 
@@ -107,54 +35,14 @@ namespace Relay.Tests
             return new PongSettings { win_score = 1, serve_wait_ticks = 5 }.ToBytes();
         }
 
-        /// <summary>둘 다 진행 간격(1000/30 ms)마다 GAME_IN을 보내며 MATCH_END를 기다린다.</summary>
-        private static void PlayUntilEnd(Peer a, Peer b)
-        {
-            var sw = Stopwatch.StartNew();
-            bool aEnd = false, bEnd = false;
-            double next = 0; // protocol.md 6.1절: 진행 간격(1000/30 ms)마다
-            while (!(aEnd && bEnd))
-            {
-                Assert.Less(sw.ElapsedMilliseconds, 30000, "match did not end in 30s");
-                if (sw.Elapsed.TotalMilliseconds >= next)
-                {
-                    next += 1000.0 / PongIds.TickHz;
-                    if (!aEnd) a.SendInput();
-                    if (!bEnd) b.SendInput();
-                }
-                aEnd = aEnd || Poll(a);
-                bEnd = bEnd || Poll(b);
-                Thread.Sleep(1);
-            }
-        }
-
-        // MATCH_END를 받으면 true. 그 사이의 GAME_OUT은 Peer가 센다.
-        private static bool Poll(Peer p)
-        {
-            while (p.Conn.TryReceive(out RelayEvent e))
-            {
-                if (e.Kind == RelayEventKind.Closed)
-                    Assert.Fail($"{p.Name}: closed during match: {e.Reason}");
-                if (e.Kind != RelayEventKind.Frame)
-                    continue;
-                p.Count(e.Frame);
-                if (e.Frame.Type == MsgType.MatchEnd)
-                {
-                    Assert.AreEqual(Protocol.MatchEndByGame, SimpleMessages.ParseU8(e.Frame.Payload), $"{p.Name}: MATCH_END reason");
-                    return true;
-                }
-                else if (e.Frame.Type == MsgType.Error)
-                {
-                    Assert.Fail($"{p.Name}: ERROR {ErrorMessage.Parse(e.Frame.Payload)}");
-                }
-            }
-            return false;
-        }
+        /// <summary>둘 다 진행 간격(1000/30 ms)마다 TCP GAME_IN을 보내며 MATCH_END를 기다린다.</summary>
+        private static void PlayUntilEnd(ServerPeer a, ServerPeer b) =>
+            ServerPeer.Run(a, p => p.SendInput(), b, p => p.SendInput());
 
         [Test, Timeout(60000)]
         public void PublicRoom_FullMatch_ThenRematch()
         {
-            Peer a = Connect("A"), b = Connect("B");
+            ServerPeer a = Connect("A"), b = Connect("B");
             byte[] settings = FastSettings();
 
             a.Send(ClientMessages.CreateRoom(PongIds.GameId, Protocol.VisibilityPublic, settings));
@@ -208,7 +96,7 @@ namespace Relay.Tests
         [Test, Timeout(30000)]
         public void PrivateRoom_JoinByCode()
         {
-            Peer a = Connect("A"), b = Connect("B");
+            ServerPeer a = Connect("A"), b = Connect("B");
             a.Send(ClientMessages.CreateRoom(PongIds.GameId, Protocol.VisibilityPrivate, null));
             var ja = RoomJoined.Parse(a.WaitFor(MsgType.RoomJoined).Payload);
             Assert.IsTrue(ja.IsPrivate);
@@ -231,7 +119,7 @@ namespace Relay.Tests
         [Test, Timeout(30000)]
         public void BadSettings_ErrorAndConnectionKept()
         {
-            Peer a = Connect("A");
+            ServerPeer a = Connect("A");
             var s = new PongSettings { paddle_h = 400 }; // field_h 600의 절반(300)을 넘는다
             Assert.IsNotNull(s.Validate());
             a.Send(ClientMessages.CreateRoom(PongIds.GameId, Protocol.VisibilityPublic, s.ToBytes()));

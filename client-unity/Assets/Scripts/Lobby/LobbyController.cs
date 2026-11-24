@@ -43,15 +43,35 @@ namespace Relay.Lobby
         public RunLog Log { get; private set; }
         /// <summary>WELCOME에서 받은 이 게임의 정보(인원 · tick_hz). WELCOME 전이거나 서버에 없으면 null.</summary>
         public GameInfo Game { get; private set; }
+        /// <summary>UDP를 시도하나(Inspector 값, 명령줄 -udp on|off가 있으면 그 값).</summary>
+        public bool UseUdp { get; private set; }
+        public UdpState Udp => _conn?.UdpState ?? UdpState.Off;
+        /// <summary>묶였나. 게임은 이 값을 보고 GAME_IN 형식(UDP 묶음 · TCP 단일)을 고른다.</summary>
+        public bool UdpBound => Udp == UdpState.Bound;
+        /// <summary>지금 게임 데이터가 오가는 길. 상태 줄과 로그에 쓴다.</summary>
+        public string Transport => UdpBound ? "UDP" : "TCP";
 
-        /// <summary>게임 쪽(GameManager)이 Start에서 부른다. 명령줄 -relayHost · -relayPort가 있으면 Inspector 값보다 앞선다.</summary>
-        public void Begin(IRoomGame game, string host, int port, RectTransform uiRoot)
+        /// <summary>
+        /// 게임 쪽(GameManager)이 Start에서 부른다. 명령줄 -relayHost · -relayPort · -udp가 있으면 Inspector 값보다 앞선다.
+        /// </summary>
+        public void Begin(IRoomGame game, string host, int port, bool useUdp, RectTransform uiRoot)
         {
             _game = game;
             Options = RunOptions.FromCommandLine();
             Log = new RunLog(Options.Get("-log"));
             Host = Options.Get("-relayHost") ?? host;
             Port = Options.GetInt("-relayPort") ?? port;
+            UseUdp = useUdp;
+            string udp = Options.Get("-udp");
+            if (udp != null)
+            {
+                if (string.Equals(udp, "on", System.StringComparison.OrdinalIgnoreCase))
+                    UseUdp = true;
+                else if (string.Equals(udp, "off", System.StringComparison.OrdinalIgnoreCase))
+                    UseUdp = false;
+                else
+                    Log.Write($"-udp {udp}: expected on|off, keeping {(UseUdp ? "on" : "off")}");
+            }
             _auto = new AutoRun(this, Options);
             _view = new LobbyView(this, uiRoot);
             Connect();
@@ -64,8 +84,8 @@ namespace Relay.Lobby
             _conn = new RelayConnection();
             State = LobbyState.Connecting;
             RttMs = -1;
-            Log.Write($"connect {Host}:{Port}");
-            _conn.Start(Host, Port);
+            Log.Write($"connect {Host}:{Port} udp={(UseUdp ? "on" : "off")}");
+            _conn.Start(Host, Port, useUdp: UseUdp);
         }
 
         // 이전 연결의 Closed 등이 새 연결 화면을 흔들지 않게 버린다.
@@ -135,7 +155,14 @@ namespace Relay.Lobby
             Send(ClientMessages.Rematch());
         }
 
+        /// <summary>TCP로 GAME_IN을 보낸다(게임이 정한 TCP 형식).</summary>
         public void SendGameIn(byte[] payload) => Send(ClientMessages.GameIn(payload));
+
+        /// <summary>
+        /// UDP로 GAME_IN을 보낸다(7장 묶기 4번). 묶이지 않았으면 false: 부른 쪽이 TCP 형식으로 다시 보낸다.
+        /// UDP는 사라져도 되는 길이라 보내기 실패를 오류로 띄우지 않는다.
+        /// </summary>
+        public bool SendGameInUdp(byte[] payload) => _conn != null && _conn.SendUdp(ClientMessages.GameIn(payload));
 
         private void Send(byte[] frame)
         {
@@ -161,6 +188,10 @@ namespace Relay.Lobby
                     Log.Write("connected");
                 else if (e.Kind == RelayEventKind.Closed)
                     OnClosed(e.Reason);
+                else if (e.Kind == RelayEventKind.UdpBound)
+                    Log.Write("transport UDP: UDP_BOUND received");
+                else if (e.Kind == RelayEventKind.UdpFailed)
+                    Log.Write("transport TCP: UDP gave up: " + e.Reason);
                 else
                     Dispatch(e.Frame);
             }

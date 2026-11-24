@@ -94,7 +94,8 @@ namespace Relay.Lobby
         {
             LobbyState s = _lobby.State;
             string rtt = _lobby.RttMs >= 0 ? $" · RTT {_lobby.RttMs} ms" : "";
-            _status.text = $"{_lobby.Host}:{_lobby.Port} · {StateText(s)}{rtt}";
+            string transport = s == LobbyState.Offline || s == LobbyState.Connecting ? "" : " · " + TransportText();
+            _status.text = $"{_lobby.Host}:{_lobby.Port} · {StateText(s)}{rtt}{transport}";
 
             bool inLobby = s == LobbyState.Offline || s == LobbyState.Connecting || s == LobbyState.Lobby;
             _lobbyPanel.gameObject.SetActive(inLobby);
@@ -122,6 +123,18 @@ namespace Relay.Lobby
             _roomInfo.text = room.IsPrivate
                 ? "친구에게 코드를 알려 주세요. 상대를 기다리는 중..."
                 : "상대를 기다리는 중...";
+        }
+
+        // 게임 데이터가 지금 어느 길로 오가나. 묶는 중 · 포기도 보여야 "UDP를 켰는데 TCP"인 까닭을 화면에서 안다.
+        private string TransportText()
+        {
+            switch (_lobby.Udp)
+            {
+                case UdpState.Bound: return "UDP";
+                case UdpState.Binding: return "TCP (UDP 묶는 중)";
+                case UdpState.Failed: return "TCP (UDP 실패)";
+                default: return "TCP";
+            }
         }
 
         private static string StateText(LobbyState s)

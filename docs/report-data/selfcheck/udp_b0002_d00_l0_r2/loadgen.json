@@ -1,0 +1,16 @@
+{
+  "config":{"host":"127.0.0.1","port":7777,"bots":2,"mode":"udp","duration_s":20.0,"ramp_s":2.0,"warmup_s":3.0,"seed":2,"win_score":21,"tick_hz":30},
+  "window_s":20.000,"window_unix_ms":[1795487338195,1795487358195],
+  "connect":{"ok":2,"fail":0,"fail_reasons":{"socket":0,"connect":0,"server_full":0,"closed":0,"protocol":0,"tool_tx_overflow":0,"no_welcome":0},"dropped_after_welcome":0,"drop_reasons":{"socket":0,"connect":0,"server_full":0,"closed":0,"protocol":0,"tool_tx_overflow":0,"no_welcome":0}},
+  "udp":{"bound":2,"fallback_tcp":0,"tx_err":0},
+  "rooms_created":1,"joins_sent":1,"matches_started":1,"matches_ended":0,"rematch_sent":0,"goals":2,
+  "errors_rx":{},
+  "inputs_late_tick_all":0,
+  "window":{"inputs_sent":1200,"inputs_sent_udp":1200,"states_rx":1200,"states_rx_udp":1200,"states_accepted":1200,"ticks_skipped":0,"tick_skip_ratio":0.000000,"states_reordered":0,"inputs_unreflected":0,"latency_untracked":0,"pings_sent":40,"pongs_rx":40},
+  "input_latency_ms":{"count":1200,"p50":33.500,"p95":33.900,"p99":34.100,"max":34.535,"mean":33.499,"overflow":0,"bin_ms":0.1,"bins":[[324,1],[325,1],[329,2],[330,2],[331,24],[332,91],[333,233],[334,312],[335,243],[336,136],[337,87],[338,35],[339,17],[340,6],[341,4],[342,3],[343,1],[344,1],[345,1]]},
+  "state_interval_ms":{"count":1200,"p50":33.400,"p95":33.800,"p99":33.900,"max":34.268,"mean":33.334,"overflow":0,"bin_ms":0.1,"bins":[[323,2],[325,4],[328,6],[329,36],[330,62],[331,222],[332,244],[333,232],[334,164],[335,99],[336,53],[337,41],[338,23],[339,2],[340,4],[341,4],[342,2]]},
+  "rtt_ms":{"count":40,"p50":0.300,"p95":0.600,"p99":0.622,"max":0.622,"mean":0.252,"overflow":0,"bin_ms":0.1,"bins":[[0,5],[1,11],[2,10],[3,8],[4,3],[5,2],[6,1]]},
+  "input_send_lag_ms":{"count":1200,"p50":0.200,"p95":0.500,"p99":0.600,"max":1.298,"mean":0.207,"overflow":0,"bin_ms":0.1,"bins":[[0,120],[1,565],[2,315],[3,133],[4,51],[5,9],[6,5],[12,2]]},
+  "input_send_lag_all_ms":{"count":1440,"p50":0.200,"p95":0.400,"p99":0.600,"max":1.298,"mean":0.197,"overflow":0,"bin_ms":0.1,"bins":[[0,159],[1,732],[2,343],[3,139],[4,51],[5,9],[6,5],[12,2]]},
+  "tool":{"cpu_user_s":0.097,"cpu_sys_s":0.000,"cpu_util":0.0048,"max_rss_kb":1644,"loop_iterations":1550,"timers_fired":1491}
+}

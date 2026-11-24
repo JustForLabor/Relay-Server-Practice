@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 
+#include "udp.h"
+
 static bool valid_len(size_t len)
 {
     /* 게임 모듈의 잘못을 그대로 내보내면 클라이언트가 프레임 위반으로 끊긴다. 버리고 기록한다. */
@@ -12,27 +14,33 @@ static bool valid_len(size_t len)
     return false;
 }
 
+/* 2차(ADR 0001): 비신뢰 메시지는 UDP로 묶인 연결이면 UDP로, 아니면 TCP로 보낸다. 신뢰 메시지는
+ * 늘 TCP다. 그래서 한 방에 UDP를 쓰는 사람과 TCP만 쓰는 사람이 섞여도 된다(protocol.md 7장). */
+static void deliver(conn *c, const uint8_t *data, size_t len, enum game_send_mode mode)
+{
+    if (mode == GAME_SEND_UNRELIABLE && udp_send_frame(c, MSG_GAME_OUT, data, len))
+        return;
+    conn_send_frame(c, MSG_GAME_OUT, data, len);
+}
+
 static void host_send(void *ctx, int slot, const uint8_t *data, size_t len,
                       enum game_send_mode mode)
 {
-    /* 1차는 신뢰 · 비신뢰 모두 같은 TCP 연결로 보낸다. */
-    (void)mode;
     room *r = ctx;
     if (slot < 0 || slot >= GAME_MAX_SLOTS || r->members[slot] == NULL || !valid_len(len))
         return;
-    conn_send_frame(r->members[slot], MSG_GAME_OUT, data, len);
+    deliver(r->members[slot], data, len, mode);
 }
 
 static void host_broadcast(void *ctx, int except_slot, const uint8_t *data, size_t len,
                            enum game_send_mode mode)
 {
-    (void)mode;
     room *r = ctx;
     if (!valid_len(len))
         return;
     for (int i = 0; i < GAME_MAX_SLOTS; i++) {
         if (i != except_slot && r->members[i] != NULL)
-            conn_send_frame(r->members[i], MSG_GAME_OUT, data, len);
+            deliver(r->members[i], data, len, mode);
     }
 }
 

@@ -6,7 +6,7 @@ using UnityEngine;
 namespace Relay.Lobby
 {
     /// <summary>
-    /// 사람 없이 두 창 대전을 확인하기 위한 명령줄 옵션(-relayHost, -autoplay, -log 등).
+    /// 사람 없이 두 창 대전을 확인하기 위한 명령줄 옵션(-relayHost, -relayPort, -udp on|off, -autoplay, -log 등).
     /// 옵션이 하나도 없으면 아무것도 바꾸지 않아 일반 실행에는 영향이 없다.
     /// 게임 전용 옵션(-bot, -winScore)도 같은 방식으로 읽도록 Has · Get을 열어 둔다.
     /// </summary>

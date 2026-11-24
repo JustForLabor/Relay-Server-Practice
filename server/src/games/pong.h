@@ -16,7 +16,9 @@ extern const game_def pong_game;
 
 enum {
     PONG_SETTINGS_LEN = 25, /* u16 12개 + u8 1개 */
-    PONG_INPUT_LEN = 5,     /* u32 input_seq + u8 axis */
+    PONG_INPUT_LEN = 5,     /* 단일 형식: u32 input_seq + u8 axis */
+    PONG_BATCH_MAX = 4,     /* 묶음 형식의 n 상한 */
+    PONG_INPUT_MAX_LEN = 1 + PONG_INPUT_LEN * PONG_BATCH_MAX, /* 묶음 21바이트 = max_input_len */
     PONG_STATE_LEN = 20,    /* 종류 1 + 19 */
     PONG_GOAL_LEN = 4,      /* 종류 1 + 3 */
     PONG_QUEUE_MAX = 4,     /* 플레이어별 입력 큐 상한 */

@@ -1,0 +1,1 @@
+{"scenario":"selfcheck","run":"udp_b0002_d20_l0_r1","rep":1,"mode":"udp","bots":2,"delay_ms":20,"loss_pct":0,"duration_s":20,"ramp_s":2,"warmup_s":3,"status":"ok","extra_args":"","loadavg_start":"0.21 0.27 0.54","loadavg_end":"0.13 0.25 0.52"}

@@ -1,0 +1,1 @@
+loadgen: bots=2 ok=2 fail=0 matches=1 states=1200 lat_p50=33.5ms lat_p99=34.0ms rtt_p50=0.20ms tool_cpu=0% -> /src/docs/report-data/selfcheck/tcp_b0002_d00_l0_r1/loadgen.json

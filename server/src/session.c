@@ -110,14 +110,27 @@ void session_handle(conn *c, const frame *f)
     case MSG_GAME_IN:
         /* 대기 중에는 경기 끝과 입력이 엇갈려 도착할 수 있어 조용히 버린다(5.1절).
          * 로비에서 보낸 입력은 방이 없으니 상태 오류로 답한다. */
-        if (st == SESSION_PLAYING)
-            match_input(c->room, c, f->payload, f->len);
-        else if (st == SESSION_LOBBY)
+        if (st == SESSION_PLAYING) {
+            int rc = match_input(c->room, c, f->payload, f->len);
+            if (rc == MATCH_INPUT_TOO_LONG) /* 5.4절: 그 종류의 허용 길이와 다르면 ERROR 없이 끊는다 */
+                conn_kill(c, "game_in longer than game limit");
+            else if (rc == MATCH_INPUT_REJECTED)
+                reply_error(c, ERR_BAD_GAME_INPUT);
+        } else if (st == SESSION_LOBBY) {
             reply_error(c, ERR_BAD_STATE);
+        }
         return;
     default:
         /* frame_check_header가 정의된 type만 넘기므로 오지 않는다. */
         conn_kill(c, "unexpected type");
         return;
     }
+}
+
+void session_udp_game_in(conn *c, const uint8_t *data, size_t len)
+{
+    /* protocol.md 7장 4번: TCP와 같은 상태 규칙이지만, UDP는 출처를 믿을 수 없으므로 어긋난 입력에
+     * 답하거나 연결을 끊지 않고 버리기만 한다. 로비에서 온 입력도 BAD_STATE로 답하지 않는다. */
+    if (session_state_of(c) == SESSION_PLAYING)
+        (void)match_input(c->room, c, data, len);
 }

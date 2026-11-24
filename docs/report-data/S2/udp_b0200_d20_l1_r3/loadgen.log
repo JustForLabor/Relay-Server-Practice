@@ -1,0 +1,1 @@
+loadgen: bots=200 ok=200 fail=0 matches=100 states=356337 lat_p50=100.1ms lat_p99=134.2ms rtt_p50=40.10ms tool_cpu=4% -> /src/docs/report-data/S2/udp_b0200_d20_l1_r3/loadgen.json

@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "rng.h"
+#include "stats.h"
 
 /* 송신 버퍼를 처음부터 64KB로 잡으면 접속 수만큼 메모리를 미리 쓴다. 작게 시작해 두 배씩 늘린다. */
 #define OUT_INITIAL_CAP 1024u
@@ -22,6 +23,8 @@ static uint32_t g_next_id = 1;
 
 static conn *g_flush_head;   /* 이번 반복에 보낼 것이 생긴 연결 */
 static conn *g_close_head;   /* 종료 표시된 연결 */
+static conn *g_by_token;     /* uthash(hh_token): udp_token → 연결 */
+static size_t g_udp_bound;
 
 int conn_system_init(int epfd, size_t max_fds)
 {
@@ -36,6 +39,26 @@ int conn_system_init(int epfd, size_t max_fds)
 size_t conn_count(void)
 {
     return g_count;
+}
+
+conn *conn_find_by_token(uint32_t token)
+{
+    conn *c;
+    HASH_FIND(hh_token, g_by_token, &token, sizeof token, c);
+    return c;
+}
+
+void conn_udp_bind(conn *c, const struct sockaddr_in *from)
+{
+    if (!c->udp_bound)
+        g_udp_bound++;
+    c->udp_bound = true;
+    c->udp_addr = *from;
+}
+
+size_t conn_udp_bound_count(void)
+{
+    return g_udp_bound;
 }
 
 static void set_epollout(conn *c, bool on)
@@ -70,7 +93,14 @@ conn *conn_open(int fd)
     c->id = g_next_id++;
     if (g_next_id == 0) /* 0은 "없음"으로 읽힐 수 있어 건너뛴다 */
         g_next_id = 1;
-    rng_fill(&c->udp_token, sizeof c->udp_token);
+    /* 토큰은 UDP 데이터그램의 주인을 가리는 유일한 근거라 추측하기 어려운 무작위 값이어야 하고,
+     * 두 연결이 같은 값을 가지면 한쪽 입력이 다른 쪽으로 가므로 겹치면 다시 뽑는다. */
+    conn *dup;
+    do {
+        rng_fill(&c->udp_token, sizeof c->udp_token);
+        HASH_FIND(hh_token, g_by_token, &c->udp_token, sizeof c->udp_token, dup);
+    } while (dup != NULL);
+    HASH_ADD(hh_token, g_by_token, udp_token, sizeof c->udp_token, c);
     g_table[fd] = c;
     g_count++;
     return c;
@@ -152,6 +182,7 @@ void conn_send_frame(conn *c, uint8_t type, const uint8_t *payload, size_t len)
     frame_put_header(dst, type, (uint16_t)len);
     if (len > 0)
         memcpy(dst + FRAME_HEADER_LEN, payload, len);
+    g_stats.tcp_tx_frames++;
 }
 
 /* 커널이 받아 주는 만큼 보낸다. 다 보냈거나 EAGAIN이면 0, 소켓 오류면 -1. */
@@ -160,14 +191,16 @@ static int write_raw(conn *c)
     while (c->out_off < c->out_len) {
         /* MSG_NOSIGNAL: 상대가 이미 닫은 소켓에 쓰면 SIGPIPE로 서버가 죽는다. 대신 EPIPE를 받는다. */
         ssize_t n = send(c->fd, c->out + c->out_off, c->out_len - c->out_off, MSG_NOSIGNAL);
-        if (n > 0)
+        if (n > 0) {
             c->out_off += (size_t)n;
-        else if (n < 0 && errno == EINTR)
+            g_stats.tcp_tx_bytes += (size_t)n;
+        } else if (n < 0 && errno == EINTR) {
             continue;
-        else if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        } else if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
             break;
-        else
+        } else {
             return -1;
+        }
     }
     if (c->out_off == c->out_len)
         c->out_off = c->out_len = 0;
@@ -211,6 +244,9 @@ static void destroy(conn *c)
     epoll_ctl(g_epfd, EPOLL_CTL_DEL, c->fd, NULL);
     close(c->fd);
     g_table[c->fd] = NULL;
+    HASH_DELETE(hh_token, g_by_token, c);
+    if (c->udp_bound)
+        g_udp_bound--;
     g_count--;
     free(c->out);
     free(c);
@@ -228,7 +264,8 @@ bool conn_sweep(void (*on_close)(conn *c))
         /* 끊기 전에 넣어 둔 마지막 메시지(ERROR(TOO_MANY_CODE_TRIES) 등)를 한 번 더 내보내 본다.
          * 논블로킹이라 커널이 받지 않으면 그냥 버린다. 오류여도 이미 닫는 중이라 무시한다. */
         (void)write_raw(c);
-        fprintf(stderr, "conn %u closed: %s\n", c->id, c->close_reason);
+        if (!g_quiet_logs)
+            fprintf(stderr, "conn %u closed: %s\n", c->id, c->close_reason);
         destroy(c);
     }
     return any;

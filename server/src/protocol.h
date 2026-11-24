@@ -17,6 +17,7 @@ enum {
     MSG_LEAVE_ROOM = 0x15,
     MSG_PING = 0x16,
     MSG_REMATCH = 0x17,
+    MSG_UDP_BIND = 0x18, /* UDP로만 온다(7장). TCP로 오면 정의되지 않은 type처럼 끊는다 */
     MSG_GAME_IN = 0x40,
 };
 
@@ -31,6 +32,7 @@ enum {
     MSG_MATCH_END = 0x86,
     MSG_PONG = 0x87,
     MSG_REMATCH_VOTED = 0x88,
+    MSG_UDP_BOUND = 0x89, /* UDP로만 보낸다(7장) */
     MSG_ERROR = 0x8F,
     MSG_GAME_OUT = 0xC0,
 };
@@ -57,5 +59,8 @@ enum { MATCH_END_BY_GAME = 0, MATCH_END_TOO_FEW = 1 };
 #define ROOM_LIST_MAX 32
 #define CODE_TRIES_MAX 5
 #define ERROR_REASON_MAX 64
+
+/* 7장: 클라이언트 → 서버 데이터그램 앞에 붙는 u32 udp_token. */
+#define UDP_TOKEN_LEN 4
 
 #endif /* PROTOCOL_H */

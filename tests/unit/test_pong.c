@@ -230,6 +230,100 @@ static void test_input_through_match(void)
     free(f);
 }
 
+/* 묶음 GAME_IN: u8 n + {u32 seq, u8 axis} n개. seqs · axes는 오래된 것부터. */
+static int send_batch(void *m, int slot, size_t n, const uint32_t *seqs, const uint8_t *axes)
+{
+    uint8_t b[1 + PONG_INPUT_LEN * PONG_BATCH_MAX];
+    b[0] = (uint8_t)n;
+    for (size_t i = 0; i < n; i++) {
+        uint8_t *it = b + 1 + i * PONG_INPUT_LEN;
+        it[0] = (uint8_t)(seqs[i] >> 24);
+        it[1] = (uint8_t)(seqs[i] >> 16);
+        it[2] = (uint8_t)(seqs[i] >> 8);
+        it[3] = (uint8_t)seqs[i];
+        it[4] = axes[i];
+    }
+    return pong_game.on_input(m, slot, b, 1 + PONG_INPUT_LEN * n);
+}
+
+static void test_batch_input(void)
+{
+    g_tests++;
+    game_host h;
+    fake *f = fake_new(&h);
+    pong_settings s;
+    pong_settings_default(&s);
+    void *m = match_with(&h, &s);
+    const uint8_t up4[4] = {PONG_AXIS_UP, PONG_AXIS_UP, PONG_AXIS_UP, PONG_AXIS_UP};
+
+    /* 게임 상한은 묶음 n = 4의 21바이트 */
+    CHECK_EQ(pong_game.max_input_len, 21);
+
+    /* 길이 · n이 맞지 않으면 거부: 단일(5)과 1 + 5n(6, 11, 16, 21) 밖의 길이, n과 길이 불일치 */
+    uint8_t raw[32] = {0};
+    for (size_t len = 1; len <= 26; len++) {
+        if (len == 5 || len == 6 || len == 11 || len == 16 || len == 21)
+            continue;
+        raw[0] = (uint8_t)((len - 1) / 5); /* 길이에 가장 가까운 n이어도 */
+        CHECK(pong_game.on_input(m, 0, raw, len) < 0);
+    }
+    raw[0] = 2; /* 길이 6(n = 1 자리)에 n = 2 */
+    CHECK(pong_game.on_input(m, 0, raw, 6) < 0);
+    raw[0] = 1; /* 길이 11(n = 2 자리)에 n = 1 */
+    CHECK(pong_game.on_input(m, 0, raw, 11) < 0);
+    raw[0] = 0; /* n = 0 */
+    CHECK(pong_game.on_input(m, 0, raw, 6) < 0);
+    raw[0] = 5; /* n = 5는 상한 밖 */
+    CHECK(pong_game.on_input(m, 0, raw, 26) < 0);
+
+    /* 한 항목이라도 axis가 틀리면 묶음 전체를 거부하고 아무것도 넣지 않는다 */
+    const uint32_t bad_seqs[2] = {1, 2};
+    const uint8_t bad_axes[2] = {PONG_AXIS_UP, 3};
+    CHECK(send_batch(m, 0, 2, bad_seqs, bad_axes) < 0);
+
+    /* 1 2 3을 묶어 보낸 뒤, 겹치는 2 3 4가 오면 4만 새로 들어간다(중복 제거) */
+    const uint32_t first[3] = {1, 2, 3};
+    CHECK_EQ(send_batch(m, 0, 3, first, up4), 0);
+    pong_game.on_tick(m, 0);
+    const event *e0 = last_state(f, 0);
+    CHECK(e0 != NULL);
+    if (e0 != NULL) /* 거부된 묶음이 번호 1을 소비하지 않았다 */
+        CHECK_EQ(rd32(e0->data + 5), 1);
+    const uint32_t overlap[3] = {2, 3, 4};
+    CHECK_EQ(send_batch(m, 0, 3, overlap, up4), 0);
+    const uint32_t expect[4] = {2, 3, 4, 4};
+    for (int t = 0; t < 4; t++) {
+        pong_game.on_tick(m, (uint32_t)(t + 1));
+        e0 = last_state(f, 0);
+        if (e0 != NULL) {
+            CHECK_EQ(rd32(e0->data + 5), expect[t]);
+            /* 위 입력 4개(1–4)만 쓰였고 마지막 진행은 4를 다시 쓴다: 5번 위로 */
+            CHECK_EQ(rd16(e0->data + 13), 300 - 12 * (t + 2));
+        }
+    }
+
+    /* 묶음 n = 4 하나로 오래된 것부터 큐에 들어간다: 5 6 7 8 중 진행에 5가 먼저 쓰인다 */
+    const uint32_t four[4] = {5, 6, 7, 8};
+    const uint8_t mixed[4] = {PONG_AXIS_DOWN, PONG_AXIS_STOP, PONG_AXIS_UP, PONG_AXIS_DOWN};
+    CHECK_EQ(send_batch(m, 1, 4, four, mixed), 0);
+    pong_game.on_tick(m, 5);
+    const event *e1 = last_state(f, 1);
+    if (e1 != NULL)
+        CHECK_EQ(rd32(e1->data + 5), 5);
+
+    /* 단일 형식과 묶음 형식을 섞어도 같은 번호 규칙: 이미 받은 8 이하는 버린다 */
+    CHECK_EQ(send_input(m, 1, 8, PONG_AXIS_UP), 0);
+    CHECK_EQ(send_input(m, 1, 9, PONG_AXIS_UP), 0);
+    for (uint32_t t = 6; t < 10; t++)
+        pong_game.on_tick(m, t);
+    e1 = last_state(f, 1);
+    if (e1 != NULL)
+        CHECK_EQ(rd32(e1->data + 5), 9);
+    CHECK(!f->overflow);
+    pong_game.match_destroy(m);
+    free(f);
+}
+
 /* ---- 진행 ---- */
 
 static void test_state_per_tick(void)
@@ -365,6 +459,7 @@ int main(void)
 {
     test_queue_rules();
     test_input_through_match();
+    test_batch_input();
     test_state_per_tick();
     test_win();
     test_determinism();

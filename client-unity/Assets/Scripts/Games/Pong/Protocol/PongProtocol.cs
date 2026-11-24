@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Relay.Net;
 
 namespace Pong.Protocol
@@ -164,8 +166,88 @@ namespace Pong.Protocol
 
     public static class PongInput
     {
-        /// <summary>GAME_IN 페이로드 5바이트: u32 input_seq, u8 axis.</summary>
+        /// <summary>묶음 형식에 담는 입력 수 상한(6.1절: 방금 입력 + 직전 3개).</summary>
+        public const int MaxBundle = 4;
+        public const int EntryLength = 5;
+
+        /// <summary>단일 형식 GAME_IN 페이로드 5바이트: u32 input_seq, u8 axis. TCP에서 쓴다.</summary>
         public static byte[] Encode(uint inputSeq, byte axis) =>
-            new PayloadWriter(5).U32(inputSeq).U8(axis).Done();
+            new PayloadWriter(EntryLength).U32(inputSeq).U8(axis).Done();
+
+        /// <summary>
+        /// 서버가 하는 해석(6.1절 두 형식). 길이 5면 단일, 1 + 5n(n = 1–4)이고 첫 바이트가 n이면 묶음.
+        /// 그 밖이면 ProtocolException(서버의 BAD_GAME_INPUT). 결과는 오래된 것부터.
+        /// </summary>
+        public static List<(uint seq, byte axis)> Parse(byte[] p)
+        {
+            var list = new List<(uint, byte)>();
+            int offset;
+            int n;
+            if (p.Length == EntryLength)
+            {
+                offset = 0;
+                n = 1;
+            }
+            else
+            {
+                n = p.Length > 0 ? p[0] : 0;
+                if (n < 1 || n > MaxBundle || p.Length != 1 + EntryLength * n)
+                    throw new ProtocolException($"GAME_IN length {p.Length}");
+                offset = 1;
+            }
+            for (int i = 0; i < n; i++, offset += EntryLength)
+            {
+                byte axis = p[offset + 4];
+                if (axis > PongIds.AxisDown)
+                    throw new ProtocolException($"axis {axis}");
+                list.Add((BigEndian.ReadU32(p, offset), axis));
+            }
+            return list;
+        }
+    }
+
+    /// <summary>
+    /// 최근 입력 4개(input_seq, axis). UDP는 데이터그램이 사라질 수 있어 매번 방금 입력과 직전 3개를
+    /// 묶음 형식으로 보낸다(6.1절 · 7장). 서버는 이미 받은 번호를 버리므로 겹쳐 보내도 한 번만 쓰인다.
+    /// TCP로 보낸 입력도 넣어 둔다: 경기 중에 UDP가 묶이면 첫 묶음부터 직전 입력을 함께 싣는다.
+    /// </summary>
+    public sealed class PongInputHistory
+    {
+        private readonly uint[] _seq = new uint[PongInput.MaxBundle];
+        private readonly byte[] _axis = new byte[PongInput.MaxBundle];
+        private int _count;
+        private int _next; // 다음에 쓸 자리(고리 버퍼)
+
+        public int Count => _count;
+
+        public void Clear()
+        {
+            _count = 0;
+            _next = 0;
+        }
+
+        public void Add(uint seq, byte axis)
+        {
+            _seq[_next] = seq;
+            _axis[_next] = axis;
+            _next = (_next + 1) % PongInput.MaxBundle;
+            if (_count < PongInput.MaxBundle)
+                _count++;
+        }
+
+        /// <summary>u8 n + {u32 input_seq, u8 axis} × n, 오래된 것부터. 비어 있으면 예외(n은 1 이상).</summary>
+        public byte[] EncodeBundle()
+        {
+            if (_count == 0)
+                throw new InvalidOperationException("no input to bundle");
+            var w = new PayloadWriter(1 + PongInput.EntryLength * _count).U8((byte)_count);
+            int start = (_next - _count + PongInput.MaxBundle) % PongInput.MaxBundle;
+            for (int i = 0; i < _count; i++)
+            {
+                int k = (start + i) % PongInput.MaxBundle;
+                w.U32(_seq[k]).U8(_axis[k]);
+            }
+            return w.Done();
+        }
     }
 }

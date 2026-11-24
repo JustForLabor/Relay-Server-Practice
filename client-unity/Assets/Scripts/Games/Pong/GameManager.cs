@@ -9,6 +9,7 @@ namespace Pong.Game
     /// <summary>
     /// Pong 게임 부분(overview 7절). 규칙 값 13개를 Inspector에 노출해 방을 만들 때 보내고,
     /// 경기 중 진행 간격(1/30초)마다 GAME_IN을 보내며, 받은 STATE를 100ms 과거로 보간해 그린다.
+    /// UDP가 묶였으면 GAME_IN을 묶음 형식(방금 + 직전 3개)으로 UDP에, 아니면 단일 형식으로 TCP에 보낸다(6.1절 · 7장).
     /// 접속 · 방 · 로비 화면은 같은 오브젝트의 LobbyController가 맡는다.
     /// 들어간 방의 실제 규칙은 ROOM_JOINED로 받은 값이다(남이 만든 방이면 Inspector 값과 다를 수 있다).
     /// </summary>
@@ -18,8 +19,10 @@ namespace Pong.Game
         [Header("서버")]
         [Tooltip("릴레이 서버 주소. 명령줄 -relayHost가 있으면 그 값을 쓴다.")]
         public string serverHost = "127.0.0.1";
-        [Tooltip("릴레이 서버 TCP 포트. 명령줄 -relayPort가 있으면 그 값을 쓴다.")]
+        [Tooltip("릴레이 서버 TCP 포트. UDP도 같은 번호를 쓴다. 명령줄 -relayPort가 있으면 그 값을 쓴다.")]
         [Range(1, 65535)] public int serverPort = 7777;
+        [Tooltip("UDP 사용: 접속 뒤 UDP로 묶어 입력 · 상태를 UDP로 주고받는다(protocol.md 7장). 2초 안에 묶이지 않으면 TCP만 쓴다. 명령줄 -udp on|off가 있으면 그 값을 쓴다.")]
+        public bool useUdp = true;
 
         // protocol.md 6.1절 표와 같은 이름 · 기본값 · 범위. 범위가 다른 값에 달린 것(paddle_h ≤ field_h/2 등)은
         // [Range]로 나타낼 수 없어 넓게 두고 OnValidate에서 서버와 같은 순서로 좁힌다.
@@ -62,6 +65,7 @@ namespace Pong.Game
         private LobbyController _lobby;
         private PongView _view;
         private readonly StateBuffer _buffer = new StateBuffer();
+        private readonly PongInputHistory _history = new PongInputHistory();
         private PongSettings _rules = new PongSettings();
         private int _mySlot;
         private bool _inRoom;
@@ -72,6 +76,13 @@ namespace Pong.Game
         private PongBot _bot;
         private int? _winScoreOverride;
         private int _states;
+        private int _staleStates; // tick이 이미 받은 것 이하라 버린 STATE(UDP 순서 뒤바뀜 · 중복)
+        private int _sentUdp;
+        private int _sentTcp;
+        // GOAL은 신뢰 메시지라 TCP로 MATCH_END보다 먼저 온다. 마지막 STATE는 UDP라 MATCH_END 뒤에 오거나
+        // 사라질 수 있으므로 결과 화면의 최종 점수는 GOAL에서 읽는다.
+        private int _goalScore0;
+        private int _goalScore1;
         private double _nextStateLog;
         private readonly bool[] _votes = new bool[2];
         // 입력이 얼마나 늦게 반영되나: STATE마다 (마지막으로 보낸 input_seq − 그 진행에 쓰인 last_input_seq).
@@ -101,7 +112,7 @@ namespace Pong.Game
             if (o.Has("-bot"))
                 _bot = new PongBot(System.Environment.TickCount);
             _view = new PongView(fieldCamera, uiRoot, OnRematchClicked, () => _lobby.LeaveRoom());
-            _lobby.Begin(this, serverHost, serverPort, uiRoot);
+            _lobby.Begin(this, serverHost, serverPort, useUdp, uiRoot);
         }
 
         /// <summary>Inspector 값(+ -winScore). 이 값이 25바이트 settings로 서버에 간다.</summary>
@@ -150,11 +161,15 @@ namespace Pong.Game
         {
             _inMatch = true;
             _inputSeq = 0;
+            _history.Clear();
             _inputBase = Time.realtimeSinceStartupAsDouble;
             // 진행 간격은 WELCOME의 게임 정보(tick_hz)를 따른다. 없으면 명세의 30Hz.
             int hz = _lobby.Game != null && _lobby.Game.TickHz > 0 ? _lobby.Game.TickHz : PongIds.TickHz;
             _tickInterval = 1.0 / hz;
             _states = 0;
+            _staleStates = 0;
+            _sentUdp = _sentTcp = 0;
+            _goalScore0 = _goalScore1 = 0;
             _lagSum = _lagMax = 0;
             _lagSamples = 0;
             _nextStateLog = Time.realtimeSinceStartupAsDouble + 5.0;
@@ -163,12 +178,14 @@ namespace Pong.Game
             _view.HideResult();
             _view.SetBanner("");
             _view.DrawInitial();
+            _lobby.Log.Write($"match transport={_lobby.Transport}");
         }
 
         public void OnMatchEnd(byte reason)
         {
             _inMatch = false;
-            _lobby.Log.Write($"match over: reason={reason} states={_states}");
+            _lobby.Log.Write($"match over: reason={reason} states={_states} transport={_lobby.Transport} " +
+                             $"stale_states_dropped={_staleStates} gamein_udp={_sentUdp} gamein_tcp={_sentTcp}");
             if (_lagSamples > 0)
                 _lobby.Log.Write(string.Format(System.Globalization.CultureInfo.InvariantCulture,
                     "input lag (sent seq - STATE last_input_seq): samples={0} mean={1:F2} max={2}",
@@ -178,9 +195,7 @@ namespace Pong.Game
                 _view.SetBanner("상대가 나가 경기가 끝났습니다");
                 return;
             }
-            // 승리한 진행의 STATE(최종 점수)는 MATCH_END보다 먼저 온다(6.1절: GOAL → STATE → 끝).
-            PongState last = _buffer.HasLatest ? _buffer.Latest : default;
-            _view.ShowResult(last.Score0, last.Score1);
+            _view.ShowResult(_goalScore0, _goalScore1);
         }
 
         public void OnRematchVoted(int slot)
@@ -199,7 +214,11 @@ namespace Pong.Game
             if (payload[0] == PongIds.OutState)
             {
                 PongState s = PongState.Parse(payload);
-                _buffer.Add(s, Time.realtimeSinceStartupAsDouble);
+                if (!_buffer.Add(s, Time.realtimeSinceStartupAsDouble))
+                {
+                    _staleStates++;
+                    return;
+                }
                 _states++;
                 if (_inMatch)
                 {
@@ -213,6 +232,8 @@ namespace Pong.Game
             else if (payload[0] == PongIds.OutGoal)
             {
                 PongGoal g = PongGoal.Parse(payload);
+                _goalScore0 = g.Score0;
+                _goalScore1 = g.Score1;
                 _lobby.Log.Write($"GOAL scorer={g.ScorerSlot} score={g.Score0}:{g.Score1} states={_states}");
             }
             else
@@ -245,7 +266,7 @@ namespace Pong.Game
             if (_inMatch && Time.realtimeSinceStartupAsDouble >= _nextStateLog)
             {
                 _nextStateLog += 5.0;
-                _lobby.Log.Write($"STATE received={_states}");
+                _lobby.Log.Write($"STATE received={_states} stale_dropped={_staleStates} transport={_lobby.Transport}");
             }
         }
 
@@ -264,7 +285,16 @@ namespace Pong.Game
             while (now >= _inputBase + _inputSeq * _tickInterval && sent < 3)
             {
                 byte axis = ReadAxis();
-                _lobby.SendGameIn(PongInput.Encode(++_inputSeq, axis));
+                uint seq = ++_inputSeq;
+                _history.Add(seq, axis);
+                // UDP는 사라질 수 있어 직전 입력을 함께 싣는다. 묶이지 않았거나 UDP 송신이 실패하면 TCP 단일 형식으로.
+                if (_lobby.UdpBound && _lobby.SendGameInUdp(_history.EncodeBundle()))
+                    _sentUdp++;
+                else
+                {
+                    _lobby.SendGameIn(PongInput.Encode(seq, axis));
+                    _sentTcp++;
+                }
                 sent++;
             }
         }

@@ -44,17 +44,21 @@ namespace Pong.Game
             _tickHz = tickHz;
         }
 
-        public void Add(PongState s, double now)
+        /// <summary>
+        /// 받은 상태를 넣는다. 이미 받은 것보다 tick이 작거나 같으면 넣지 않고 false(protocol.md 7장).
+        /// UDP로 오면 순서가 바뀌거나 같은 것이 두 번 올 수 있고, 그런 상태를 넣으면 보간이 과거로 되돌아간다.
+        /// </summary>
+        public bool Add(PongState s, double now)
         {
-            // TCP라 순서는 지켜지지만, 같은 tick이 두 번 오거나 거꾸로 오면 보간이 꼬이므로 버린다.
             if (_states.Count > 0 && s.Tick <= Latest.Tick)
-                return;
+                return false;
             _states.Add(s);
             if (_states.Count > Keep)
                 _states.RemoveAt(0);
             double candidate = now - s.Tick / (double)_tickHz;
             if (candidate < _offset)
                 _offset = candidate;
+            return true;
         }
 
         /// <summary>now에서 delay초 과거의 모습. 상태가 없으면 false.</summary>

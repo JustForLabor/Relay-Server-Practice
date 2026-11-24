@@ -5,7 +5,8 @@
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "Relay.Net",
-        "Pong.Protocol"
+        "Pong.Protocol",
+        "Pong.Game"
     ],
     "includePlatforms": [
         "Editor"

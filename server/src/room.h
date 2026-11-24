@@ -82,4 +82,7 @@ int rooms_timeout_ms(uint64_t now);
 /* 지금 있는 방 수(테스트 · 로그용). */
 size_t rooms_count(void);
 
+/* 경기가 진행 중인 방 수(통계). */
+size_t rooms_match_count(void);
+
 #endif /* ROOM_H */

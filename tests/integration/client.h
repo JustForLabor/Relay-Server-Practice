@@ -22,6 +22,7 @@ typedef struct msg {
 
 typedef struct client {
     int fd;
+    int ufd;           /* UDP 소켓(서버 주소로 connect). 묶지 않았으면 -1 */
     uint8_t buf[8192];
     size_t len;
     uint32_t conn_id;
@@ -90,5 +91,23 @@ typedef struct room_info {
 int client_expect_joined(client *c, room_info *ri);
 
 uint64_t itest_now_ms(void);
+
+/* ---- UDP (protocol.md 7장, udp_client.c) ---- */
+
+/* 서버 UDP 포트로 connect한 새 UDP 소켓. 소켓마다 출처 포트가 달라 "다른 주소"를 흉내 낼 수 있다. */
+int udp_socket_open(void);
+
+/* u32 token + 프레임 하나를 데이터그램 하나로 보낸다. */
+void udp_send_frame_tok(int fd, uint32_t token, uint8_t type, const void *payload, size_t len);
+void udp_send_bytes(int fd, const void *bytes, size_t n);
+
+/* 데이터그램 하나 = 프레임 하나(토큰 없음)를 받는다. 1 받음, 0 시간 초과, -1 프레임이 아님. */
+int udp_recv(int fd, msg *m, int timeout_ms);
+
+/* c->ufd를 열고(없으면) UDP_BIND를 0.2초마다 보내 2초 안에 UDP_BOUND를 받으면 1, 아니면 0. */
+int client_udp_bind(client *c);
+
+/* Pong 묶음 GAME_IN(6.1절)을 UDP로: 새 입력(++seq)과 그 앞 최대 3개, 오래된 것부터. */
+void send_pong_batch_udp(client *c, uint8_t axis);
 
 #endif /* ITEST_CLIENT_H */
