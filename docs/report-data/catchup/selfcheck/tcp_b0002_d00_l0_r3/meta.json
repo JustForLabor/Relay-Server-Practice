@@ -1,0 +1,1 @@
+{"scenario":"selfcheck","run":"tcp_b0002_d00_l0_r3","rep":3,"mode":"tcp","bots":2,"delay_ms":0,"loss_pct":0,"duration_s":20,"ramp_s":2,"warmup_s":3,"status":"ok","extra_args":"","loadavg_start":"0.09 0.11 0.09","loadavg_end":"0.30 0.17 0.11"}

@@ -1,0 +1,1 @@
+{"scenario":"S2","run":"tcp_b0200_d20_l0_r2","rep":2,"mode":"tcp","bots":200,"delay_ms":20,"loss_pct":0,"duration_s":60,"ramp_s":2,"warmup_s":3,"status":"ok","extra_args":"","loadavg_start":"0.12 0.36 0.47","loadavg_end":"0.08 0.30 0.44"}

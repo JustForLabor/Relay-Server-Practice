@@ -1,0 +1,2 @@
+max conns 65520, udp on, stats every 1 s, quiet
+shutting down: 0 connections, 0 rooms

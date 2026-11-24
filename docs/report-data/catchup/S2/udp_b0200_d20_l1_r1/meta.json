@@ -1,0 +1,1 @@
+{"scenario":"S2","run":"udp_b0200_d20_l1_r1","rep":1,"mode":"udp","bots":200,"delay_ms":20,"loss_pct":1,"duration_s":60,"ramp_s":2,"warmup_s":3,"status":"ok","extra_args":"","loadavg_start":"0.15 0.56 0.55","loadavg_end":"0.33 0.52 0.54"}
