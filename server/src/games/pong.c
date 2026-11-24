@@ -401,6 +401,12 @@ static void pong_on_tick(void *match, uint32_t tick)
         return;
     const game_host *h = m->host;
 
+    /* 따라잡기: 큐에 2개 이상 밀려 있으면 오래된 것 하나를 패들 이동에만 먼저 쓴다.
+     * 한 번 늦게 온 입력 때문에 큐가 찬 채 굳어 지연이 경기 끝까지 남는 것을 막는다. */
+    for (int slot = 0; slot < 2; slot++) {
+        if (m->queue[slot].count >= 2)
+            move_paddle(&m->state.paddle_y[slot], pong_queue_take(&m->queue[slot]), &m->settings);
+    }
     uint8_t a0 = pong_queue_take(&m->queue[0]);
     uint8_t a1 = pong_queue_take(&m->queue[1]);
     int scorer = pong_step(&m->state, &m->settings, a0, a1);

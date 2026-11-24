@@ -197,34 +197,48 @@ static void test_input_through_match(void)
     CHECK_EQ(send_input(m, 0, 2, PONG_AXIS_UP), 0);
     CHECK_EQ(send_input(m, 0, 2, PONG_AXIS_DOWN), 0); /* 중복은 조용히 버린다 */
 
+    /* 따라잡기: 큐에 1 · 2 두 개가 있으면 한 진행에 둘 다 쓴다(1은 패들 이동에만) */
     pong_game.on_tick(m, 0);
     const event *e0 = last_state(f, 0), *e1 = last_state(f, 1);
     CHECK(e0 != NULL && e1 != NULL);
     if (e0 != NULL && e1 != NULL) {
-        CHECK_EQ(rd32(e0->data + 5), 1); /* slot 0은 입력 1을 썼다 */
+        CHECK_EQ(rd32(e0->data + 5), 2); /* slot 0은 입력 2까지 썼다 */
         CHECK_EQ(rd32(e1->data + 5), 0); /* slot 1은 입력이 없다 */
-        CHECK_EQ(rd16(e0->data + 13), 300 - 12);
+        CHECK_EQ(rd16(e0->data + 13), 300 - 24); /* 중복(아래)이 버려져 위로 두 번 */
     }
     pong_game.on_tick(m, 1);
-    e0 = last_state(f, 0);
-    if (e0 != NULL) {
-        CHECK_EQ(rd32(e0->data + 5), 2);
-        CHECK_EQ(rd16(e0->data + 13), 300 - 24); /* 중복(아래)이 버려져 위로 한 번 더 */
-    }
-    pong_game.on_tick(m, 2);
     e0 = last_state(f, 0);
     if (e0 != NULL) {
         CHECK_EQ(rd32(e0->data + 5), 2); /* 큐가 비어 직전 입력(2, 위)을 다시 쓴다 */
         CHECK_EQ(rd16(e0->data + 13), 300 - 36);
     }
 
-    /* 넘침: 진행 사이에 3 .. 8 여섯 개가 오면 가장 오래된 3 · 4가 버려져 5부터 쓴다 */
+    /* 하나만 있으면 하나만 쓴다 */
+    send_input(m, 0, 3, PONG_AXIS_UP);
+    pong_game.on_tick(m, 2);
+    e0 = last_state(f, 0);
+    if (e0 != NULL) {
+        CHECK_EQ(rd32(e0->data + 5), 3);
+        CHECK_EQ(rd16(e0->data + 13), 300 - 48);
+    }
+
+    /* 넘침: 진행 사이에 3 .. 8 여섯 개가 오면 가장 오래된 3 · 4가 버려져 5 6 7 8이 남는다.
+     * 따라잡기로 두 진행에 다 쓰고 큐가 빈다: 밀린 지연이 경기 끝까지 남지 않는다. */
     for (uint32_t seq = 3; seq <= 8; seq++)
         send_input(m, 1, seq, PONG_AXIS_DOWN);
     pong_game.on_tick(m, 3);
     e1 = last_state(f, 1);
     if (e1 != NULL)
-        CHECK_EQ(rd32(e1->data + 5), 5);
+        CHECK_EQ(rd32(e1->data + 5), 6);
+    pong_game.on_tick(m, 4);
+    e1 = last_state(f, 1);
+    if (e1 != NULL)
+        CHECK_EQ(rd32(e1->data + 5), 8);
+    send_input(m, 1, 9, PONG_AXIS_DOWN);
+    pong_game.on_tick(m, 5);
+    e1 = last_state(f, 1);
+    if (e1 != NULL)
+        CHECK_EQ(rd32(e1->data + 5), 9); /* 새로 온 입력이 바로 다음 진행에 쓰인다 */
     CHECK(!f->overflow);
     pong_game.match_destroy(m);
     free(f);
@@ -287,29 +301,33 @@ static void test_batch_input(void)
     pong_game.on_tick(m, 0);
     const event *e0 = last_state(f, 0);
     CHECK(e0 != NULL);
-    if (e0 != NULL) /* 거부된 묶음이 번호 1을 소비하지 않았다 */
-        CHECK_EQ(rd32(e0->data + 5), 1);
+    if (e0 != NULL) /* 거부된 묶음이 번호 1을 소비하지 않았다: 1 2 3 중 따라잡기로 1 · 2를 쓴다 */
+        CHECK_EQ(rd32(e0->data + 5), 2);
     const uint32_t overlap[3] = {2, 3, 4};
     CHECK_EQ(send_batch(m, 0, 3, overlap, up4), 0);
-    const uint32_t expect[4] = {2, 3, 4, 4};
-    for (int t = 0; t < 4; t++) {
+    /* 큐는 3 4: 다음 진행에 둘 다 쓰고, 그 다음은 4를 다시 쓴다 */
+    const uint32_t expect[2] = {4, 4};
+    const int expect_y[2] = {300 - 48, 300 - 60};
+    for (int t = 0; t < 2; t++) {
         pong_game.on_tick(m, (uint32_t)(t + 1));
         e0 = last_state(f, 0);
         if (e0 != NULL) {
             CHECK_EQ(rd32(e0->data + 5), expect[t]);
             /* 위 입력 4개(1–4)만 쓰였고 마지막 진행은 4를 다시 쓴다: 5번 위로 */
-            CHECK_EQ(rd16(e0->data + 13), 300 - 12 * (t + 2));
+            CHECK_EQ(rd16(e0->data + 13), expect_y[t]);
         }
     }
 
-    /* 묶음 n = 4 하나로 오래된 것부터 큐에 들어간다: 5 6 7 8 중 진행에 5가 먼저 쓰인다 */
+    /* 묶음 n = 4 하나로 오래된 것부터 큐에 들어간다: 5 6 7 8 중 진행에 5 · 6이 먼저 쓰인다 */
     const uint32_t four[4] = {5, 6, 7, 8};
     const uint8_t mixed[4] = {PONG_AXIS_DOWN, PONG_AXIS_STOP, PONG_AXIS_UP, PONG_AXIS_DOWN};
     CHECK_EQ(send_batch(m, 1, 4, four, mixed), 0);
     pong_game.on_tick(m, 5);
     const event *e1 = last_state(f, 1);
-    if (e1 != NULL)
-        CHECK_EQ(rd32(e1->data + 5), 5);
+    if (e1 != NULL) {
+        CHECK_EQ(rd32(e1->data + 5), 6);
+        CHECK_EQ(rd16(e1->data + 15), 300 + 12); /* 5(아래)로 한 번, 6(정지) */
+    }
 
     /* 단일 형식과 묶음 형식을 섞어도 같은 번호 규칙: 이미 받은 8 이하는 버린다 */
     CHECK_EQ(send_input(m, 1, 8, PONG_AXIS_UP), 0);
