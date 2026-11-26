@@ -60,7 +60,6 @@ make
 ## 문서
 
 - 시스템 개요: [docs/overview.md](docs/overview.md)
-- 학습 자료: [docs/study/](docs/study/README.md)
 - 프로토콜 명세: [docs/protocol.md](docs/protocol.md) (초안)
 - 설계 결정 기록: [docs/adr/](docs/adr/) (0001 전송 계층, 0002 공통 영역 · 게임 모듈 분리)
 - 측정 보고서: `docs/report.md` (작성 예정)
